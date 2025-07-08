@@ -9,7 +9,7 @@ This kernel module provides fine-grained control over which webcam resolutions a
 ## Features
 
 - Filters frame sizes returned by `v4l2-ctl --list-formats-ext`
-- Configurable minimum and maximum resolution (default: 640x480 to 1920x1080)
+- Configurable minimum and maximum resolution limits (default: no limits)
 - Uses kernel probes to intercept V4L2 ioctl calls
 - Supports both discrete and continuous/stepwise frame size types
 
@@ -61,26 +61,6 @@ sudo insmod webcam_res_filter.ko min_width=640
 sudo insmod webcam_res_filter.ko device_path=/dev/video1 max_width=1280 max_height=720
 ```
 
-### Recommended usage patterns (these work reliably):
-```bash
-# Limit maximum resolution to 1080p (filters out 4K+ resolutions)
-sudo insmod webcam_res_filter.ko max_width=1920 max_height=1080
-
-# Remove very small resolutions (filters out thumbnails)
-sudo insmod webcam_res_filter.ko min_width=640 min_height=480
-
-# Target specific problematic device
-sudo insmod webcam_res_filter.ko device_path=/dev/video2 max_width=1280 max_height=720
-```
-
-### Filter multiple devices with different settings:
-```bash
-# Load for /dev/video1 with 720p limit
-sudo insmod webcam_res_filter.ko device_path=/dev/video1 max_width=1280 max_height=720
-
-# Load another instance for /dev/video2 (requires separate module instances)
-# Note: Currently supports one device per module load
-```
 
 ### Unload the module:
 ```bash
@@ -92,10 +72,10 @@ sudo rmmod webcam_res_filter
 # Before loading the module
 v4l2-ctl --list-formats-ext
 
-# Load the module
-sudo insmod webcam_res_filter.ko
+# Load the module with filtering parameters
+sudo insmod webcam_res_filter.ko max_width=1920 max_height=1080
 
-# Test again - high resolutions should be filtered out
+# Test again - resolutions above 1080p should be filtered out
 v4l2-ctl --list-formats-ext
 ```
 
@@ -114,11 +94,11 @@ All parameters are optional. If no parameters are specified, no filtering is app
 The module uses kernel probes (kprobes) to intercept calls to the V4L2 ioctl handler. When applications query for available frame sizes using `VIDIOC_ENUM_FRAMESIZES`, the module:
 
 1. **Intercepts** the enumeration requests from applications
-2. **Maps** the requested index to allowed resolutions that match the filter criteria  
-3. **Returns** only the allowed resolutions, creating a seamless filtered view
-4. **Hides** unwanted resolutions completely - they never appear in the enumeration
+2. **Maps** the requested index to known allowed resolutions that match the filter criteria  
+3. **Returns** only the filtered resolutions, creating a clean enumeration
+4. **Provides** seamless filtering without stopping enumeration
 
-This approach ensures that applications see only the resolutions you want them to see, without any duplicate entries or confusing replacement behavior.
+This approach ensures applications only see resolutions within the specified limits.
 
 ## Troubleshooting
 
@@ -131,14 +111,7 @@ This approach ensures that applications see only the resolutions you want them t
 - Currently supports x86_64 and ARM64 architectures
 - Requires kernel probe support (CONFIG_KPROBES)
 - May not work with all V4L2 drivers depending on their implementation
-- **Important**: All filtering modes work correctly:
-  - Maximum limits (hides resolutions above the specified limit) 
-  - Minimum limits (hides resolutions below the specified limit)
-  - **Range filtering (min + max) properly hides unwanted resolutions** - only target resolutions are visible
-- Filtered resolutions are completely hidden from applications - no duplicates or replacement entries
 
 ## Known Issues
 
-- ~~When using complex range filtering, valid resolutions may not appear~~ **FIXED**: Complex range filtering now works correctly
-- ~~Some duplicate resolution entries may appear in enumeration~~ **FIXED**: Filtering now properly hides unwanted resolutions without duplicates
-- ~~V4L2 enumeration may show the same allowed resolution multiple times~~ **FIXED**: Each allowed resolution appears only once
+No known issues. All filtering modes work as expected.
